@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wandler"
+version = "0.0.1"
+authors = [
+  { name="Rosshhun Gadde", email="me@rosshhun.com" },
+]
+description = "A simple Python-based task orchestrator."
+readme = "README.md" # Tells PyPI to use your README for the description
+requires-python = ">=3.8"
+license = { file="LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "PyYAML>=6.0", # Your script needs this
+]
+
+[project.urls]
+"Homepage" = "https://github.com/rosshhun/wandler"
+
+[project.scripts]
+wandler = "wandler.cli:main"
+

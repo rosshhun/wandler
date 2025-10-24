@@ -1,0 +1,38 @@
+name: Publish Wandler to PyPI
+
+on:
+  release:
+    # This workflow will only run when you create a new "release"
+    # on your GitHub repository.
+    types: [published]
+
+jobs:
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      # This permission is required to upload to PyPI.
+      id-token: write
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build the package
+        run: python -m build
+
+      - name: Publish to PyPI
+        # This action is the official one for publishing.
+        # It securely uses the API token you'll set up.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No 'with:' block is needed here if you use the
+        # 'id-token: write' permission above, which is the
+        # most secure "passwordless" method.
