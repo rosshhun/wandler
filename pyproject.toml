@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wandler"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Rosshhun Gadde", email="me@rosshhun.com" },
 ]
-description = "A simple Python-based task orchestrator."
-readme = "README.md" # Tells PyPI to use your README for the description
+description = "A simple, fast, Python-native task runner"
+readme = "README.md"
 requires-python = ">=3.8"
 license = { file="LICENSE" }
 classifiers = [
