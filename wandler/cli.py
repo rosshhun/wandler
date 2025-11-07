@@ -1,13 +1,13 @@
 import typer
-import yaml
-from pathlib import Path
-from pydantic import ValidationError
-from typing_extensions import Annotated
 import importlib.metadata
-import subprocess
-import shlex
+from typing_extensions import Annotated
+from .errors import TaskError, ConfigError
+from .config import ConfigManager
+from .engine import TaskRunner
+from .output import TyperOutputHandler
 
-from .config import find_config, load_config, validate_config
+config_manage = ConfigManager()
+output = TyperOutputHandler()
 
 app = typer.Typer(
     help="wandler: A smart, fast task orchestrator for Python projects.",
@@ -51,100 +51,62 @@ def callback(
 
 
 @app.command()
+@app.command()
 def run(task_name: str):
-    """Run the specified task by name."""
-    config_file_path: Path = find_config()
+    """
+    Run a specific task by name.
 
-    if not config_file_path:
-        typer.secho("Error: No wandler.yaml configuration file found.", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+    Args:
+        task_name (str): The name of the task to run.
 
+    Returns:
+        None
+    """
     try:
-        raw_config_data = load_config(config_file_path)
-        validated_config = validate_config(raw_config_data)
-        task_to_run = validated_config.tasks.get(task_name, '')
+        # 1. Manager delegates config work
+        config = config_manage.get_config()
+        base_dir = config_manage.get_config_path().parent
 
-        if not task_to_run:
-            typer.echo(f"Error: Task '{task_name}' not found in the configuration.")
-            raise typer.Exit(code=1)
+        # 2. Manager finds the specialist
+        runner = TaskRunner(config, base_dir, output)
 
-        typer.echo(f"Running task '{task_name}': {task_to_run.command}")
-        command_list = shlex.split(task_to_run.command)
-        subprocess.run(
-            command_list,
-            cwd=config_file_path.parent,
-            check=True
-        )
-        typer.secho(f"Task '{task_name}' completed successfully.", fg=typer.colors.GREEN)
+        # 3. Manager delegates the *actual work*
+        runner.run_task(task_name)
 
-    except subprocess.CalledProcessError as e:
-        # This catches when the task (e.g., ruff, pytest) fails
-        typer.secho(f"\nError: Task '{task_name}' failed!", fg=typer.colors.RED, bold=True)
-        typer.echo(f"The command '{task_to_run.command}' returned a non-zero exit code.")
-        raise typer.Exit(code=1)
-
-    except ValidationError as e:
-        typer.secho("Error: Your 'wandler.yaml' file has invalid content.", fg=typer.colors.RED, bold=True)
-        typer.echo("Please fix the following validation errors:")
-        typer.echo(str(e))
-        raise typer.Exit(code=1)
-
-    except yaml.YAMLError as e:
-        typer.secho("Error: Your 'wandler.yaml' file is not valid YAML.", fg=typer.colors.RED, bold=True)
-        typer.echo("It seems to have a syntax error. Please check for typos like missing colons or bad indentation.")
-        typer.echo(f"\nYAML Parser Details:\n{e}")
-        raise typer.Exit(code=1)
-
-    except OSError as e:
-        typer.secho(f"Error: Could not read the file at {config_file_path}.", fg=typer.colors.RED, bold=True)
-        typer.echo("Please check that the file exists and you have permission to read it.")
-        typer.echo(f"\nOS Error Details: {e}")
-        raise typer.Exit(code=1)
+    except ConfigError as e:
+        output.error(str(e))  # Manager handles errors
+    except TaskError as e:
+        output.error(str(e))  # Manager handles errors
 
 @app.command(name="list")
 def list_tasks():
-    """Lists all available tasks defined in the configuration file.
+    """
+    List all available tasks defined in the configuration file.
 
     Reads the configuration, validates it, and prints a formatted list
     of all task names along with their descriptions.
+
+    Returns:
+        None
+
+    Raises:
+        typer.Exit: If there is a configuration error.
     """
-    config_file_path: Path = find_config()
-
-    if not config_file_path:
-        typer.secho("Error: No wandler.yaml configuration file found.", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
-
     try:
-        raw_config_data = load_config(config_file_path)
-        validated_config = validate_config(raw_config_data)
+        config = config_manage.get_config()
 
-        if not validated_config.tasks:
-            typer.secho("No tasks found in the configuration file.", fg=typer.colors.YELLOW)
+        if not config.tasks:
+            output.warn("No tasks found in the configuration file.")
             return
 
-        typer.secho("Available tasks:", bold=True)
-        for task_name, task_details in validated_config.tasks.items():
-            # Use f-string alignment for clean, table-like output
-            # This pads the task name to 20 characters
+        output.info("Available tasks:")
+        for task_name, task_details in config.tasks.items():
             description = task_details.description or "No description"
-            typer.echo(f"{task_name:<20} - {description}")
+            line = f"{task_name:<20} - {description}"
+            output.info(line)
 
-    except ValidationError as e:
-        typer.secho("Error: Your 'wandler.yaml' file has invalid content.", fg=typer.colors.RED, bold=True)
-        typer.echo("Please fix the following validation errors:")
-        typer.echo(str(e))
-        raise typer.Exit(code=1)
-
-    except yaml.YAMLError as e:
-        typer.secho("Error: Your 'wandler.yaml' file is not valid YAML.", fg=typer.colors.RED, bold=True)
-        typer.echo("It seems to have a syntax error. Please check for typos like missing colons or bad indentation.")
-        typer.echo(f"\nYAML Parser Details:\n{e}")
-        raise typer.Exit(code=1)
-
-    except OSError as e:
-        typer.secho(f"Error: Could not read the file at {config_file_path}.", fg=typer.colors.RED, bold=True)
-        typer.echo("Please check that the file exists and you have permission to read it.")
-        typer.echo(f"\nOS Error Details: {e}")
+    except ConfigError as e:
+        output.error(str(e))
         raise typer.Exit(code=1)
 
 def main():
